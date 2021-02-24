@@ -34,8 +34,8 @@ The Bela software is distributed under the GNU Lesser General Public License
 
 #define MAX_FACTOR 4.0
 
-#define HX711_CLOCK_PIN 59
-#define HX711_DATA_PIN 50
+#define HX711_CLOCK_PIN 30
+#define HX711_DATA_PIN 23
 #define SAMPLE_MEMORY 64
 #define HX711_SPREAD 10
 #define SCK_ON (clockGpio.set())
@@ -43,16 +43,21 @@ The Bela software is distributed under the GNU Lesser General Public License
 #define DT_R (dataGpio.read())
 
 void reset_converter(void);
-unsigned long read_cnt(long offset, int argc);
+unsigned long read_cnt(long offset);
 void set_gain(int r);
 void setHighPri(void);
+void setup_gpio();
 
 Gpio clockGpio;
 Gpio dataGpio;
 float spread_percent = HX711_SPREAD / 100.0 / 2.0;
-std::vector<long> samples;
-int argc = 13; // no idea why the hx711 code reports such a long argc but it
-               // relies on it in a few places
+std::vector<long> hx711Samples;
+long hx711Reading = 0;
+AuxiliaryTask hx711Task;
+// Change this to change how often the HX711 is read (in Hz)
+int readInterval = 10;
+int readCount = 0;           // How long until we read again...
+int readIntervalSamples = 0; // How many samples between reads
 
 std::string gFilename = "localnatives.wav";
 std::vector<std::vector<float>> gSampleData;
@@ -104,7 +109,9 @@ void set_gain(int r) {
   }
 }
 
-unsigned long read_cnt(long offset, int argc) {
+unsigned long read_cnt(long offset) {
+  int argc = 13; // no idea why the hx711 code reports such a long argc but it
+                 // relies on it in a few places
   long count;
   int b = 0;
 
@@ -165,6 +172,35 @@ unsigned long read_cnt(long offset, int argc) {
   return (count - offset);
 }
 
+void readHX711(void *) {
+  long currentReading = read_cnt(0);
+  hx711Reading = currentReading;
+  // hx711Samples.push_back(currentReading);
+  // if (hx711Samples.size() > SAMPLE_MEMORY) {
+  //  hx711Samples.erase(hx711Samples.begin());
+  //}
+
+  // long average = accumulate(hx711Samples.begin(), hx711Samples.end(), 0.0) /
+  //                hx711Samples.size();
+  // float filter_low = (float)average * (1.0 - spread_percent);
+  // float filter_high = (float)average * (1.0 + spread_percent);
+  // int cleanSamples = 0;
+  // long cleanSum = 0;
+  // for (auto s : hx711Samples) {
+  //   if (s > filter_low && s < filter_high) {
+  //     cleanSum += s;
+  //     cleanSamples++;
+  //   }
+  // }
+  // if (cleanSamples == 0) {
+  //   // we jumped a lot?
+  //   cleanSamples = 1;
+  // }
+
+  // rt_printf("Reading: %ld\tSmooth avg: %ld\tSamples: %d\n", currentReading,
+  //           cleanSum / cleanSamples, cleanSamples);
+}
+
 bool setup(BelaContext *context, void *userData) {
   gSampleData = AudioFileUtilities::load(gFilename);
   // Check if analog channels are enabled
@@ -180,6 +216,9 @@ bool setup(BelaContext *context, void *userData) {
     gAudioFramesPerAnalogFrame = context->audioFrames / context->analogFrames;
 
   // HX711 related setup
+  hx711Task = Bela_createAuxiliaryTask(readHX711, 50, "bela-hx711");
+  readIntervalSamples = context->audioSampleRate / readInterval;
+
   setHighPri();
   setup_gpio();
   reset_converter();
@@ -191,27 +230,10 @@ void render(BelaContext *context, void *userData) {
   float factorRaw = 0.0;
   float amplitude;
 
-  long currentReading = read_cnt(0, argc);
-  samples.push_back(currentReading);
-  if (samples.size() > SAMPLE_MEMORY) {
-    samples.erase(samples.begin());
-  }
-
-  long average =
-      accumulate(samples.begin(), samples.end(), 0.0) / samples.size();
-  float filter_low = (float)average * (1.0 - spread_percent);
-  float filter_high = (float)average * (1.0 + spread_percent);
-  int cleanSamples = 0;
-  long cleanSum = 0;
-  for (auto s : samples) {
-    if (s > filter_low && s < filter_high) {
-      cleanSum += s;
-      cleanSamples++;
-    }
-  }
-  if (cleanSamples == 0) {
-    // we jumped a lot?
-    cleanSamples = 1;
+  // times our read for aux task every readInterval hz
+  if (++readCount >= readIntervalSamples) {
+    readCount = 0;
+    Bela_scheduleAuxiliaryTask(hx711Task);
   }
 
   for (unsigned int n = 0; n < context->audioFrames; n++) {
@@ -239,10 +261,9 @@ void render(BelaContext *context, void *userData) {
     }
     // Print a message once in a while
     if (gCount % (int)(context->audioSampleRate) == 0) {
-      // rt_printf("FactorRaw: %.2f\tFactor: %.4f\tstep: %.4f\n", factorRaw,
-      // factor, MAX_FACTOR / factor);
-      rt_printf("Reading: %ld\tSmooth avg: %ld\tSamples: %d\n", currentReading,
-                cleanSum / cleanSamples, cleanSamples);
+      rt_printf("FactorRaw: %.2f\tFactor: %.4f\tstep: %.4f\n", factorRaw,
+                factor, MAX_FACTOR / factor);
+      rt_printf("HX711: %ld\n", hx711Reading);
     }
 
     for (unsigned int channel = 0; channel < context->audioOutChannels;
@@ -251,7 +272,7 @@ void render(BelaContext *context, void *userData) {
       // the file contains
       float out = amplitude * gSampleData[channel % gSampleData.size()]
                                          [(int)(gReadPtr / MAX_FACTOR)];
-      // audioWrite(context, n, channel, out);
+      audioWrite(context, n, channel, out);
     }
   }
 }
