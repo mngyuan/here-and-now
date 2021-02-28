@@ -23,6 +23,7 @@ The Bela software is distributed under the GNU Lesser General Public License
 
 #include <Bela.h>
 #include <Gpio.h>
+#include <cmath>
 #include <libraries/AudioFile/AudioFile.h>
 #include <numeric>
 #include <sched.h>
@@ -69,6 +70,14 @@ int gCount = 0; // frames encountered ever
 // Set the analog channels to read from
 int gAnalogInputSpeed = 0;
 int gAnalogInputAmplitude = 1;
+// readings - does this need to be global .. ?
+float factor = 1.0;
+float factorRaw = 0.0;
+float amplitude;
+// for sine wav
+float gSineFrequency = 440.0;
+float gSinePhase;
+float gInverseSampleRate;
 
 void setHighPri(void) {
   struct sched_param sched;
@@ -219,17 +228,21 @@ bool setup(BelaContext *context, void *userData) {
   hx711Task = Bela_createAuxiliaryTask(readHX711, 50, "bela-hx711");
   readIntervalSamples = context->audioSampleRate / readInterval;
 
+  // need to set pins for HX711 to gpio
+  // system("config-pin P2.03 gpio");
+  // system("config-pin P2.05 gpio");
+
   setHighPri();
   setup_gpio();
   reset_converter();
+
+  // // for sine wave
+  gInverseSampleRate = 1.0 / context->audioSampleRate;
+  gSinePhase = 0.0;
   return true;
 }
 
 void render(BelaContext *context, void *userData) {
-  float factor = 1.0;
-  float factorRaw = 0.0;
-  float amplitude;
-
   // times our read for aux task every readInterval hz
   if (++readCount >= readIntervalSamples) {
     readCount = 0;
@@ -259,6 +272,12 @@ void render(BelaContext *context, void *userData) {
       // Replay when at end
       gReadPtr = 0.0;
     }
+
+    float sineOut = 0.8 * sinf(gSinePhase);
+    gSinePhase += 2.0 * M_PI * gSineFrequency * gInverseSampleRate;
+    if (gSinePhase > 2.0 * M_PI)
+      gSinePhase -= 2.0 * M_PI;
+
     // Print a message once in a while
     if (gCount % (int)(context->audioSampleRate) == 0) {
       rt_printf("FactorRaw: %.2f\tFactor: %.4f\tstep: %.4f\n", factorRaw,
@@ -272,7 +291,7 @@ void render(BelaContext *context, void *userData) {
       // the file contains
       float out = amplitude * gSampleData[channel % gSampleData.size()]
                                          [(int)(gReadPtr / MAX_FACTOR)];
-      audioWrite(context, n, channel, out);
+      audioWrite(context, n, channel, out * 0.5 + sineOut * 0.5);
     }
   }
 }
