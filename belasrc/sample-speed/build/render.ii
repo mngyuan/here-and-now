@@ -1,11 +1,11 @@
-# 1 "/root/Bela/projects/sample-speed/render.cpp"
+# 1 "/root/Bela/projects/gizmo/sample-speed/render.cpp"
 # 1 "<built-in>" 1
 # 1 "<built-in>" 3
 # 365 "<built-in>" 3
 # 1 "<command line>" 1
 # 1 "<built-in>" 2
-# 1 "/root/Bela/projects/sample-speed/render.cpp" 2
-# 24 "/root/Bela/projects/sample-speed/render.cpp"
+# 1 "/root/Bela/projects/gizmo/sample-speed/render.cpp" 2
+# 24 "/root/Bela/projects/gizmo/sample-speed/render.cpp"
 # 1 "./include/Bela.h" 1
 # 61 "./include/Bela.h"
 extern "C"
@@ -3157,7 +3157,7 @@ static inline unsigned int multiplexerChannelForFrame(BelaContext *context, int 
 
 
 }
-# 25 "/root/Bela/projects/sample-speed/render.cpp" 2
+# 25 "/root/Bela/projects/gizmo/sample-speed/render.cpp" 2
 # 1 "./libraries/AudioFile/AudioFile.h" 1
 
 # 1 "/usr/bin/../lib/gcc/arm-linux-gnueabihf/6.3.0/../../../../include/c++/6.3.0/string" 1 3
@@ -24068,7 +24068,7 @@ namespace AudioFileUtilities {
 
  std::vector<float> loadMono(const std::string& file);
 };
-# 26 "/root/Bela/projects/sample-speed/render.cpp" 2
+# 26 "/root/Bela/projects/gizmo/sample-speed/render.cpp" 2
 
 
 std::string gFilename = "localnatives.wav";
