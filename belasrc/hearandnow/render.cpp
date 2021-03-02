@@ -33,12 +33,16 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include <unistd.h>
 #include <vector>
 
+#define DEV true
+#define POT_INPUT false
 #define MAX_FACTOR 4.0
 
 #define HX711_CLOCK_PIN 30
 #define HX711_DATA_PIN 23
 #define SAMPLE_MEMORY 64
 #define HX711_SPREAD 10
+#define USER_PRES_MIN 40000
+#define USER_PRES_MAX 3500000
 #define SCK_ON (clockGpio.set())
 #define SCK_OFF (clockGpio.clear())
 #define DT_R (dataGpio.read())
@@ -60,6 +64,8 @@ int readInterval = 10;
 int readCount = 0;           // How long until we read again...
 int readIntervalSamples = 0; // How many samples between reads
 
+// Bela globals
+// sample
 std::string gFilename = "localnatives.wav";
 std::vector<std::vector<float>> gSampleData;
 float gReadPtr = 0.0; // Position of last read sample from file
@@ -236,10 +242,9 @@ bool setup(BelaContext *context, void *userData) {
   setup_gpio();
   reset_converter();
 
-  // // for sine wave
+  // for sine wave
   gInverseSampleRate = 1.0 / context->audioSampleRate;
   gSinePhase = 0.0;
-  return true;
 }
 
 void render(BelaContext *context, void *userData) {
@@ -256,11 +261,18 @@ void render(BelaContext *context, void *userData) {
       // Depending on the sampling rate of the analog inputs, this will
       // happen every audio frame (if it is 44100)
       // or every two audio frames (if it is 22050)
-      factorRaw = analogRead(context, n / gAudioFramesPerAnalogFrame,
-                             gAnalogInputSpeed);
-      factor = map(factorRaw, 0, 1, 1.0, MAX_FACTOR);
-      amplitude = analogRead(context, n / gAudioFramesPerAnalogFrame,
-                             gAnalogInputAmplitude);
+
+      if (POT_INPUT) {
+        factorRaw = analogRead(context, n / gAudioFramesPerAnalogFrame,
+                               gAnalogInputSpeed);
+        factor = map(factorRaw, 0, 1, 1.0, MAX_FACTOR);
+        amplitude = analogRead(context, n / gAudioFramesPerAnalogFrame,
+                               gAnalogInputAmplitude);
+      } else {
+        factor =
+            map(hx711Reading, USER_PRES_MIN, USER_PRES_MAX, 1.0, MAX_FACTOR);
+        amplitude = map(hx711Reading, USER_PRES_MIN, USER_PRES_MAX, 0.0, 1.0);
+      }
       // rt_printf("Factor: %.2f\n", factor);
     }
 
@@ -291,7 +303,7 @@ void render(BelaContext *context, void *userData) {
       // the file contains
       float out = amplitude * gSampleData[channel % gSampleData.size()]
                                          [(int)(gReadPtr / MAX_FACTOR)];
-      audioWrite(context, n, channel, out * 0.5 + sineOut * 0.5);
+      audioWrite(context, n, channel, out);
     }
   }
 }
