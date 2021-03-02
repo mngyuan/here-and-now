@@ -285,7 +285,7 @@ void render(BelaContext *context, void *userData) {
       gReadPtr = 0.0;
     }
 
-    float sineOut = 0.8 * sinf(gSinePhase);
+    float sineOut = sinf(gSinePhase);
     gSinePhase += 2.0 * M_PI * gSineFrequency * gInverseSampleRate;
     if (gSinePhase > 2.0 * M_PI)
       gSinePhase -= 2.0 * M_PI;
@@ -303,7 +303,7 @@ void render(BelaContext *context, void *userData) {
       // the file contains
       float out = amplitude * gSampleData[channel % gSampleData.size()]
                                          [(int)(gReadPtr / MAX_FACTOR)];
-      audioWrite(context, n, channel, out);
+      audioWrite(context, n, channel, out + sineOut);
     }
   }
 }
