@@ -33,8 +33,8 @@ The Bela software is distributed under the GNU Lesser General Public License
 #include <unistd.h>
 #include <vector>
 
-#define DEV true
-#define POT_INPUT false
+#define MENG_DEV true
+#define MENG_POT_INPUT false
 #define MAX_FACTOR 4.0
 
 #define HX711_CLOCK_PIN 30
@@ -60,7 +60,7 @@ std::vector<long> hx711Samples;
 long hx711Reading = 0;
 AuxiliaryTask hx711Task;
 // Change this to change how often the HX711 is read (in Hz)
-int readInterval = 10;
+int readInterval = 80;
 int readCount = 0;           // How long until we read again...
 int readIntervalSamples = 0; // How many samples between reads
 
@@ -245,6 +245,7 @@ bool setup(BelaContext *context, void *userData) {
   // for sine wave
   gInverseSampleRate = 1.0 / context->audioSampleRate;
   gSinePhase = 0.0;
+  return true;
 }
 
 void render(BelaContext *context, void *userData) {
@@ -262,7 +263,7 @@ void render(BelaContext *context, void *userData) {
       // happen every audio frame (if it is 44100)
       // or every two audio frames (if it is 22050)
 
-      if (POT_INPUT) {
+      if (MENG_POT_INPUT) {
         factorRaw = analogRead(context, n / gAudioFramesPerAnalogFrame,
                                gAnalogInputSpeed);
         factor = map(factorRaw, 0, 1, 1.0, MAX_FACTOR);
@@ -303,7 +304,7 @@ void render(BelaContext *context, void *userData) {
       // the file contains
       float out = amplitude * gSampleData[channel % gSampleData.size()]
                                          [(int)(gReadPtr / MAX_FACTOR)];
-      audioWrite(context, n, channel, out + sineOut);
+      audioWrite(context, n, channel, out);
     }
   }
 }
