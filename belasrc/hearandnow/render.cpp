@@ -41,8 +41,8 @@ The Bela software is distributed under the GNU Lesser General Public License
 #define HX711_DATA_PIN 23
 #define SAMPLE_MEMORY 64
 #define HX711_SPREAD 10
-#define USER_PRES_MIN 40000
-#define USER_PRES_MAX 3500000
+#define USER_PRES_MIN -20000
+#define USER_PRES_MAX 800000
 #define SCK_ON (clockGpio.set())
 #define SCK_OFF (clockGpio.clear())
 #define DT_R (dataGpio.read())
@@ -66,8 +66,12 @@ int readIntervalSamples = 0; // How many samples between reads
 
 // Bela globals
 // sample
-std::string gFilename = "localnatives.wav";
-std::vector<std::vector<float>> gSampleData;
+std::string gOriginalFilename = "localnatives.wav";
+std::vector<std::vector<float>> gOriginalSampleData;
+std::string gRemixFilename = "21-01 here and now.wav";
+std::vector<std::vector<float>> gRemixSampleData;
+std::string gFullRemixFilename = "21-01 here and now max.wav";
+std::vector<std::vector<float>> gFullRemixSampleData;
 float gReadPtr = 0.0; // Position of last read sample from file
 int gCurSampleReadTimes =
     0; // How many times the current read sample has been played
@@ -80,10 +84,6 @@ int gAnalogInputAmplitude = 1;
 float factor = 1.0;
 float factorRaw = 0.0;
 float amplitude;
-// for sine wav
-float gSineFrequency = 440.0;
-float gSinePhase;
-float gInverseSampleRate;
 
 void setHighPri(void) {
   struct sched_param sched;
@@ -217,7 +217,9 @@ void readHX711(void *) {
 }
 
 bool setup(BelaContext *context, void *userData) {
-  gSampleData = AudioFileUtilities::load(gFilename);
+  gOriginalSampleData = AudioFileUtilities::load(gOriginalFilename);
+  gRemixSampleData = AudioFileUtilities::load(gRemixFilename);
+  gFullRemixSampleData = AudioFileUtilities::load(gFullRemixFilename);
   // Check if analog channels are enabled
 
   if (context->analogFrames == 0 ||
@@ -242,9 +244,6 @@ bool setup(BelaContext *context, void *userData) {
   setup_gpio();
   reset_converter();
 
-  // for sine wave
-  gInverseSampleRate = 1.0 / context->audioSampleRate;
-  gSinePhase = 0.0;
   return true;
 }
 
@@ -281,29 +280,47 @@ void render(BelaContext *context, void *userData) {
     // 1 8
     // 0.5 16
     gReadPtr += MAX_FACTOR / factor;
-    if (gReadPtr > gSampleData[0].size() * MAX_FACTOR) {
+    if (gReadPtr > gOriginalSampleData[0].size() * MAX_FACTOR) {
       // Replay when at end
       gReadPtr = 0.0;
     }
 
-    float sineOut = sinf(gSinePhase);
-    gSinePhase += 2.0 * M_PI * gSineFrequency * gInverseSampleRate;
-    if (gSinePhase > 2.0 * M_PI)
-      gSinePhase -= 2.0 * M_PI;
-
     // Print a message once in a while
     if (gCount % (int)(context->audioSampleRate) == 0) {
-      rt_printf("FactorRaw: %.2f\tFactor: %.4f\tstep: %.4f\n", factorRaw,
-                factor, MAX_FACTOR / factor);
-      rt_printf("HX711: %ld\n", hx711Reading);
+      // rt_printf("FactorRaw: %.2f\tFactor: %.4f\tstep: %.4f\n", factorRaw,
+      //           factor, MAX_FACTOR / factor);
+      rt_printf("HX711: %ld\tAmplitude: %.2f\n", hx711Reading, amplitude);
     }
 
     for (unsigned int channel = 0; channel < context->audioOutChannels;
          channel++) {
       // Wrap channel index in case there are more audio output channels than
       // the file contains
-      float out = amplitude * gSampleData[channel % gSampleData.size()]
-                                         [(int)(gReadPtr / MAX_FACTOR)];
+      float originalOut =
+          gOriginalSampleData[channel % gOriginalSampleData.size()]
+                             [(int)(gReadPtr / MAX_FACTOR)];
+      float remixOut = gRemixSampleData[channel % gRemixSampleData.size()]
+                                       [(int)(gReadPtr / MAX_FACTOR)];
+      float fullRemixOut =
+          gFullRemixSampleData[channel % gFullRemixSampleData.size()]
+                              [(int)(gReadPtr / MAX_FACTOR)];
+      float out;
+      // this system of linear equations is best understood if you draw out the
+      // graph
+      if (amplitude < 1.0 / 3.0) {
+        out = 3.0 / 2.0 * amplitude * originalOut;
+      } else if (amplitude < 2.0 / 3.0) {
+        out = 3.0 * (amplitude - 1.0 / 3.0) * remixOut +
+              (-3.0 / 2.0) * (amplitude - 2.0 / 3.0) * originalOut;
+      } else {
+        out = -3.0 * (amplitude - 1) * remixOut +
+              3.0 * (amplitude - 2.0 / 3.0) * fullRemixOut;
+      }
+
+      // deadzone for when it's not being held
+      if (amplitude < 0.15) {
+        out = 0;
+      }
       audioWrite(context, n, channel, out);
     }
   }
