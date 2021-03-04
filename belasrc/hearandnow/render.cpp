@@ -318,7 +318,7 @@ void render(BelaContext *context, void *userData) {
       }
 
       // deadzone for when it's not being held
-      if (amplitude < 0.15) {
+      if (amplitude < 0.015) {
         out = 0;
       }
       audioWrite(context, n, channel, out);
