@@ -6,9 +6,7 @@ Here + Now is a tactile auditory experience inviting participants to be gentle a
 
 Watch the demo [here](https://vimeo.com/527483800)
 
-RCA / ICL Gizmo 2021 for GID / IDE 2022
-
-Made with Bela mini
+[Featured on the Bela blog](https://blog.bela.io/here-and-now/)
 
 ## Project description
 
